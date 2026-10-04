@@ -39,3 +39,10 @@ The migration guide could reference other migration examples in the current
 changelog entry.
 
 ## Unreleased
+
+### Fixed
+
+- On Android, exit the event loop when its activity is destroyed so the
+  native application can finish teardown.
+- On Android, allow a recreated activity to create a new event loop in the
+  same process.

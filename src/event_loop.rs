@@ -10,7 +10,9 @@
 use std::marker::PhantomData;
 #[cfg(any(x11_platform, wayland_platform))]
 use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(not(android_platform))]
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{error, fmt};
 
 #[cfg(not(web_platform))]
@@ -66,6 +68,7 @@ pub struct EventLoopBuilder<T: 'static> {
     _p: PhantomData<T>,
 }
 
+#[cfg(not(android_platform))]
 static EVENT_LOOP_CREATED: AtomicBool = AtomicBool::new(false);
 
 impl EventLoopBuilder<()> {
@@ -99,7 +102,9 @@ impl<T> EventLoopBuilder<T> {
     /// - **Wayland/X11:** to prevent running under `Wayland` or `X11` unset `WAYLAND_DISPLAY` or
     ///   `DISPLAY` respectively when building the event loop.
     /// - **Android:** must be configured with an `AndroidApp` from `android_main()` by calling
-    ///   [`.with_android_app(app)`] before calling `.build()`, otherwise it'll panic.
+    ///   [`.with_android_app(app)`] before calling `.build()`, otherwise it'll panic. A replacement
+    ///   activity may create a new event loop after the previous activity and its event loop have
+    ///   finished.
     ///
     /// [`platform`]: crate::platform
     #[cfg_attr(
@@ -115,6 +120,10 @@ impl<T> EventLoopBuilder<T> {
     pub fn build(&mut self) -> Result<EventLoop<T>, EventLoopError> {
         let _span = tracing::debug_span!("winit::EventLoopBuilder::build").entered();
 
+        // Android's loop belongs to an Activity, which can be destroyed and
+        // recreated without restarting the process. Its backend holds the
+        // AndroidApp explicitly, so a new activity needs a new event loop.
+        #[cfg(not(android_platform))]
         if EVENT_LOOP_CREATED.swap(true, Ordering::Relaxed) {
             return Err(EventLoopError::RecreationAttempt);
         }
